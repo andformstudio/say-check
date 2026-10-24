@@ -154,6 +154,8 @@ details input{margin-top:8px;width:100%;font:400 1rem var(--f-body);color:var(--
     const b = e.target.closest("button"); if (!b || b.dataset.k === key) return;
     key = b.dataset.k; result = null; msg = ""; if (rec) try { rec.abort(); } catch(_){} render();
   });
+  // a new card opened into the same tab only changes the hash: start over with its text
+  addEventListener("hashchange", () => location.reload());
   render();
 })();
 </script>
