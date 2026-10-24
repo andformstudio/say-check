@@ -40,6 +40,8 @@ h1 .hl{background:linear-gradient(transparent 58%,var(--marker) 58%,var(--marker
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 20px;display:flex;flex-direction:column;gap:16px}
 .target{font-family:var(--f-display);font-weight:700;font-size:1.7rem;line-height:1.25;word-break:break-word;margin:0}
 .target.long{font-size:1.3rem;line-height:1.4}
+.target.ja{font-family:var(--f-body);font-weight:700}
+.hint{margin:0 0 -8px;font-family:var(--f-mono);font-size:.75rem;color:var(--muted)}
 .row{display:flex;gap:10px}
 .btn{flex:1;border:0;border-radius:12px;padding:16px 12px;font:700 1.05rem var(--f-body);cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center}
 .btn svg{width:20px;height:20px}
@@ -78,7 +80,10 @@ details input{margin-top:8px;width:100%;font:400 1rem var(--f-body);color:var(--
   const p = new URLSearchParams(location.hash.slice(1));
   const texts = { w: (p.get("w") || "").replace(/[~〜]/g, "").trim(), ex: (p.get("ex") || "").trim() };
   let key = p.get("k") === "ex" && texts.ex ? "ex" : (texts.w ? "w" : "ex");
-  let result = null, msg = "", listening = false, rec = null;
+  // h=1: recall practice. Show the Japanese (qw / qex) and keep the English hidden until he has tried or asks for it
+  const prompts = { w: (p.get("qw") || "").trim(), ex: (p.get("qex") || "").trim() };
+  const recall = p.get("h") === "1";
+  let result = null, msg = "", listening = false, rec = null, shown = false;
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const canTalk = "speechSynthesis" in window;
@@ -110,9 +115,11 @@ details input{margin-top:8px;width:100%;font:400 1rem var(--f-body);color:var(--
     $("tabs").hidden = !(texts.w && texts.ex);
     document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === key)));
     if (!text){ $("card").innerHTML = '<div class="empty">練習する文がありません。単語帳のカードから開いてください。</div>'; return; }
-    let h = '<p class="target' + (text.length > 28 ? ' long' : '') + '" lang="en">' + esc(text) + '</p>' +
+    const hide = recall && prompts[key] && !result && !shown;
+    let h = (hide ? '<p class="hint">英語で言ってみる</p><p class="target ja' + (prompts[key].length > 20 ? ' long' : '') + '">' + esc(prompts[key]) + '</p>'
+      : '<p class="target' + (text.length > 28 ? ' long' : '') + '" lang="en">' + esc(text) + '</p>') +
       '<div class="row">' +
-      (canTalk ? '<button class="btn listen" id="listen">' + SPEAK_SVG + 'Listen</button>' : '') +
+      (hide ? '<button class="btn listen" id="reveal">答えを見る</button>' : canTalk ? '<button class="btn listen" id="listen">' + SPEAK_SVG + 'Listen</button>' : '') +
       (SR ? '<button class="btn mic' + (listening ? ' on' : '') + '" id="mic">' + MIC_SVG + (listening ? 'Listening…' : 'Speak') + '</button>' : '') +
       '</div><p class="msg" aria-live="polite">' + esc(msg) + '</p>';
     if (result){
@@ -125,6 +132,7 @@ details input{margin-top:8px;width:100%;font:400 1rem var(--f-body);color:var(--
       '<input id="typed" lang="en" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ここをタップして、キーボードの🎤で言う → Enter"></details>';
     $("card").innerHTML = h;
     if ($("listen")) $("listen").onclick = () => speak(text);
+    if ($("reveal")) $("reveal").onclick = () => { shown = true; render(); };
     if ($("mic")) $("mic").onclick = () => listen(text);
     $("typed").onkeydown = e => { if (e.key === "Enter" && e.target.value.trim()){ e.preventDefault(); result = judge(text, e.target.value); msg = ""; render(); } };
   }
@@ -152,7 +160,7 @@ details input{margin-top:8px;width:100%;font:400 1rem var(--f-body);color:var(--
 
   $("tabs").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || b.dataset.k === key) return;
-    key = b.dataset.k; result = null; msg = ""; if (rec) try { rec.abort(); } catch(_){} render();
+    key = b.dataset.k; result = null; msg = ""; shown = false; if (rec) try { rec.abort(); } catch(_){} render();
   });
   // a new card opened into the same tab only changes the hash: start over with its text
   addEventListener("hashchange", () => location.reload());
